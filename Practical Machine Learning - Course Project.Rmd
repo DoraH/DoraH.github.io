@@ -1,0 +1,147 @@
+---
+title: "Practical Machine Learning - Course Project"
+output: html_document
+---
+
+**Background**
+
+Using devices such as *Jawbone Up, Nike FuelBand*, and *Fitbit* it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways: 
+
+- exactly according to the specification (Class A)
+- throwing the elbows to the front (Class B)
+- lifting the dumbbell only halfway (Class C)
+- lowering the dumbbell only halfway (Class D)
+- throwing the hips to the front (Class E)
+
+Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes.
+
+More information is available from the website here: <http://groupware.les.inf.puc-rio.br/har> (see the section on the Weight Lifting Exercise Dataset). 
+
+**Data**
+
+The training data for this project are available here: 
+
+<https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv>
+
+The test data are available here: 
+
+<https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv>
+
+The data for this project come from this source: <http://groupware.les.inf.puc-rio.br/har>.
+
+**What you should submit**
+
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases. 
+
+1. Your submission should consist of a link to a Github repo with your R markdown and compiled HTML file describing your analysis. Please constrain the text of the writeup to < 2000 words and the number of figures to be less than 5. It will make it easier for the graders if you submit a repo with a gh-pages branch so the HTML page can be viewed online (and you always want to make it easy on graders :-).
+2. You should also apply your machine learning algorithm to the 20 test cases available in the test data above. Please submit your predictions in appropriate format to the programming assignment for automated grading. See the programming assignment for additional details. 
+
+##Reproducibility
+In order to reproduce the results below, we need to set a seed.
+Packages such as caret, randomForest, rpart and rattle are required as well.
+
+**Loading Required Libraries**
+```{r}
+library(caret)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+```
+
+**Set Seed**
+```{r}
+set.seed(1234)
+```
+
+##Loading and Cleaning Data
+In this section, after loading the data, columns with missing values and irrelevant variables will be delected.
+
+```{r,results='hide'}
+# URL for the training data set
+trainUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+
+# URL for the testing data set
+testUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+# Storing data files in memory
+training <- read.csv(url(trainUrl), na.strings=c("NA","#DIV/0!",""))
+testing <- read.csv(url(testUrl), na.strings=c("NA","#DIV/0!",""))
+
+# Checking for the number of variables and observations
+dim(training)
+dim(testing)
+
+# Delete columns with missing values
+training1 <- training[,colSums(is.na(training)) == 0]
+testing1 <- testing[,colSums(is.na(testing)) == 0]
+
+# Deleting irrelevant variables (user_name, raw_timestamp_part_1, raw_timestamp_part_, 2 cvtd_timestamp, new_window, and num_window; columns 1 to 7)
+training1 <- training1[,-c(1:7)]
+testing1 <- testing1[,-c(1:7)]
+
+# Checking for the number of variables and observations for the new data set
+dim(training1)
+dim(testing1)
+```
+
+##Partioning the Training Data Set
+There are 19,622 observations in the training set, in order to reduce time and perform cross-validation, the training data set is partionned into 2 sets, myTraining (75%) and myTesting (25%).
+
+```{r}
+inTrain <- createDataPartition(y=training1$classe, p=0.75, list=FALSE)
+myTraining <- training1[inTrain, ]
+myTesting <- training1[-inTrain, ]
+dim(myTraining)
+dim(myTesting)
+```
+
+##1st Prediction Model - Decision Tree
+
+```{r}
+modFit1 <- rpart(classe ~ ., data=myTraining, method="class")
+
+# Predicting
+prediction1 <- predict(modFit1, myTesting, type = "class")
+
+# Plotting
+fancyRpartPlot(modFit1, cex=.5,under.cex=1,shadow.offset=0)
+
+# Testing results on myTesting data set
+confusionMatrix(prediction1, myTesting$classe)
+```
+
+##2nd Prediction Model - Random Forest
+
+```{r}
+modFit2 <- randomForest(classe ~., data=myTraining, method="class")
+
+# Predicting
+prediction2 <- predict(modFit2, myTesting, type = "class")
+
+# Testing results on myTesting data set
+confusionMatrix(prediction2, myTesting$classe)
+```
+
+*Conclusion*
+Random Forest model will be choosen as our final model as it has a higher accuracy of 0.991, as compared to Decision Tree model, which has an accuracy of 0.724. The expected out-of-sample error is calculated as 1 - accuracy for predictions made against the cross-validation set. And since our testing data set comprises of only 20 cases, we can expect that very few of the test samples will be missclassified.
+
+##Generating Files to submit as answers for the Assignment
+
+```{r}
+# Applying Random Forest algorithm to the original Testing data set
+predictionfinal <- predict(modFit2, testing, type = "class")
+predictionfinal
+
+
+# Generating files with predictions to submit for assignment
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(predictionfinal)
+```
